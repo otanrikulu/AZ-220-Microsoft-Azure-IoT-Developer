@@ -24,7 +24,7 @@ namespace X509CertificateSimulatedDevice
         private const string GlobalDeviceEndpoint = "global.azure-devices-provisioning.net";
 
         // Azure Device Provisioning Service (DPS) ID Scope
-        private static string dpsIdScope = "<DPS-ID-Scope>";
+        private static string dpsIdScope = "0ne000F332A";
 
         // Certificate (PFX) File Name
         private static string s_certificateFileName = "new-device.cert.pfx";
@@ -143,11 +143,16 @@ namespace X509CertificateSimulatedDevice
                 await iotClient.OpenAsync().ConfigureAwait(false);
 
 
-                // TODO 1: Setup OnDesiredPropertyChanged Event Handling to receive Desired Properties changes
+                 // TODO 1: Setup OnDesiredPropertyChanged Event Handling to receive Desired Properties changes
+                Console.WriteLine("Connecting SetDesiredPropertyUpdateCallbackAsync event handler...");
+                await iotClient.SetDesiredPropertyUpdateCallbackAsync(OnDesiredPropertyChanged, null).ConfigureAwait(false);
                 
 
                 // TODO 2: Load Device Twin Properties since device is just starting up
-
+                Console.WriteLine("Loading Device Twin Properties...");
+                var twin = await iotClient.GetTwinAsync().ConfigureAwait(false);
+                // Use OnDesiredPropertyChanged event handler to set the loaded Device Twin Properties (re-use!)
+                await OnDesiredPropertyChanged(twin.Properties.Desired, null);
 
                 // Start reading and sending device telemetry
                 Console.WriteLine("Start reading and sending device telemetry...");
@@ -158,6 +163,31 @@ namespace X509CertificateSimulatedDevice
                 await iotClient.CloseAsync().ConfigureAwait(false);
             }
         }    
+
+             private async Task OnDesiredPropertyChanged(TwinCollection desiredProperties, object userContext)
+            {
+                 Console.WriteLine("Desired Twin Property Changed:");
+                 Console.WriteLine($"{desiredProperties.ToJson()}");
+
+                // Read the desired Twin Properties
+                 if (desiredProperties.Contains("telemetryDelay"))
+                {
+                     string desiredTelemetryDelay = desiredProperties["telemetryDelay"];
+                     if (desiredTelemetryDelay != null)
+                    {
+                         this._telemetryDelay = int.Parse(desiredTelemetryDelay);
+                    }
+                    // if desired telemetryDelay is null or unspecified, don't change it
+                 }
+
+
+                 // Report Twin Properties
+                var reportedProperties = new TwinCollection();
+                reportedProperties["telemetryDelay"] = this._telemetryDelay;
+                await iotClient.UpdateReportedPropertiesAsync(reportedProperties).ConfigureAwait(false);
+                Console.WriteLine("Reported Twin Properties:");
+                Console.WriteLine($"{reportedProperties.ToJson()}");
+            }
 
         private async Task SendDeviceToCloudMessagesAsync(DeviceClient deviceClient)
         {
